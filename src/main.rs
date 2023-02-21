@@ -1,4 +1,3 @@
-use rand::prelude::*;
 use std::error::Error;
 use std::fmt::Display;
 
@@ -13,18 +12,18 @@ fn main() {
     }
 }
 
+const MAX_PLAYER_SKILL: u8 = 99;
+
 #[derive(Debug, Clone)]
 struct Player {
     name: String,
-    skill: f64,
+    skill: u8,
 }
 
 impl Player {
     fn new() -> Self {
-        let mut rng = rand::thread_rng();
-
-        let skill_seed: f64 = rng.gen();
-        let skill = 10f64 * skill_seed;
+        // Skill from 0-99
+        let skill = rand::random::<u8>() % (MAX_PLAYER_SKILL + 1);
 
         let names = vec![
             "Alice", "Bob", "Charlie", "Dave", "Emily", "Filip", "George", "Helena",
@@ -50,16 +49,19 @@ impl Game {
         Self { players }
     }
 
-    fn calculate_player_power(&self, skill: f64) -> f64 {
-        let mut rng = rand::thread_rng();
-        let boost_factor: f64 = 10.0;
-        let boost_multiplier: f64 = rng.gen();
-        skill + boost_factor * boost_multiplier
+    fn calculate_player_power(skill: u8, apply_skill_boost: bool) -> u8 {
+        let skill_boost: u8 = 5;
+
+        if apply_skill_boost {
+            return std::cmp::min(skill + skill_boost, MAX_PLAYER_SKILL);
+        }
+
+        skill
     }
 
     fn determine_winner(&self) -> Player {
-        let player_one_power = self.calculate_player_power(self.players[0].skill);
-        let player_two_power = self.calculate_player_power(self.players[1].skill);
+        let player_one_power = Self::calculate_player_power(self.players[0].skill, rand::random());
+        let player_two_power = Self::calculate_player_power(self.players[1].skill, rand::random());
 
         if player_one_power > player_two_power {
             return self.players[0].clone();
@@ -81,9 +83,11 @@ struct Round {
 
 impl Round {
     fn new(initial_player_pool: Vec<Player>) -> Self {
+        let players_in_match = 2;
+
         Self {
             games: initial_player_pool
-                .chunks(2)
+                .chunks(players_in_match)
                 .map(|chunk| Game::new(chunk.to_vec()))
                 .collect::<Vec<_>>(),
             winners_player_pool: vec![],
@@ -104,7 +108,7 @@ impl Round {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum BracketError {
     InvalidNumPlayers(u8),
 }
@@ -187,6 +191,35 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_calculate_player_power() {
+        assert_eq!(
+            Game::calculate_player_power(MAX_PLAYER_SKILL, false),
+            MAX_PLAYER_SKILL
+        );
+        assert_eq!(Game::calculate_player_power(0, false), 0);
+        assert_eq!(
+            Game::calculate_player_power(MAX_PLAYER_SKILL, true),
+            MAX_PLAYER_SKILL
+        );
+        assert_eq!(Game::calculate_player_power(0, true), 5);
+        assert_eq!(Game::calculate_player_power(94, true), MAX_PLAYER_SKILL);
+    }
+
+    #[test]
+    fn test_bracket_creation() {
+        let num_players = 2;
+        let bracket = Bracket::new(num_players);
+        assert!(bracket.is_ok());
+
+        let num_players = 3;
+        let bracket = Bracket::new(num_players);
+        assert!(bracket.is_err());
+        if let Err(error) = bracket {
+            assert_eq!(error, BracketError::InvalidNumPlayers(num_players))
+        };
+    }
+
+    #[test]
     fn test_is_positive_power_of_two() {
         assert!(Bracket::is_positive_power_of_two(1));
         assert!(Bracket::is_positive_power_of_two(2));
@@ -200,5 +233,23 @@ mod tests {
         assert!(!Bracket::is_positive_power_of_two(0));
         assert!(!Bracket::is_positive_power_of_two(3));
         assert!(!Bracket::is_positive_power_of_two(69));
+    }
+
+    #[test]
+    fn test_rounds_required() {
+        let bracket = Bracket::new(1).unwrap();
+        assert_eq!(bracket.rounds_required(), 0);
+
+        let bracket = Bracket::new(2).unwrap();
+        assert_eq!(bracket.rounds_required(), 1);
+
+        let bracket = Bracket::new(4).unwrap();
+        assert_eq!(bracket.rounds_required(), 2);
+
+        let bracket = Bracket::new(8).unwrap();
+        assert_eq!(bracket.rounds_required(), 3);
+
+        let bracket = Bracket::new(16).unwrap();
+        assert_eq!(bracket.rounds_required(), 4);
     }
 }
