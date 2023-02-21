@@ -39,13 +39,15 @@ impl Player {
     }
 }
 
+type PlayerPair = [Player; 2];
+
 #[derive(Debug, Clone)]
 struct Game {
-    players: Vec<Player>,
+    players: PlayerPair,
 }
 
 impl Game {
-    fn new(players: Vec<Player>) -> Self {
+    fn new(players: PlayerPair) -> Self {
         Self { players }
     }
 
@@ -87,7 +89,11 @@ impl Round {
         Self {
             games: initial_player_pool
                 .chunks(players_in_match)
-                .map(|chunk| Game::new(chunk.to_vec()))
+                .map(|chunk| {
+                    let chunk_vec = chunk.to_vec();
+                    let chunk_array: [Player; 2] = [chunk_vec[0].clone(), chunk_vec[1].clone()];
+                    Game::new(chunk_array)
+                })
                 .collect::<Vec<_>>(),
         }
     }
