@@ -4,29 +4,33 @@ Brackets simulates the progression of a generic tournament bracket.
 
 ## Basic concepts
 
-1. A given number of players is used to create a **bracket**.
+- A **bracket** is created using a specified positive number of players.
 
-1. Each bracket consists of one or more **rounds**.
+- The bracket progresses players through a series of **rounds**, each of which is composed of **games**.
 
-1. Each round consists of one or more **games**.
+- A game is a competitive simulation between a pair of **players**.
 
-1. Each game consists of exactly two **players**.
+- The winning player from each game is carried forward to the next round; the process repeats until a single player remains.
 
-## Algorithm
+## Round progression
+
+An example from a generic `Round x` to `Round x + 1` is given here:
 
 ```mermaid
 graph TD;
-  X[Initial player pool]-->A
-  A[Current round player pool]-->B[Round R];
-  B-->C[Game 1]
-  B-->D[Game 2]
-  B-->E[Game N]
-  C-->F[Winner]
-  D-->G[Winner]
-  E-->H[Winner]
-  F-->A
-  G-->A
-  H-->A
+
+  A((Round 'x' player pool))--Create round -->B[Round 'x'];
+  B-- Create game -->C[Game 1]
+  B-- Create game -->D[Game 2]
+  B-- Create game -->E[Game N]
+  C-- Simulate game -->F[Winner]
+  D-- Simulate game -->G[Winner]
+  E-- Simulate game -->H[Winner]
+
+  F-->I((Round 'x+1' player pool))
+  G-->I
+  H-->I
+
 ```
 
 1. For a given round, a pool of players is provided as input.
@@ -35,7 +39,7 @@ graph TD;
 
 1. Each game is then simulated to determine a winner between each pair of players.
 
-1. The winner for the current round are then provided as the pool of players to the next round, if another round is needed.
+1. The winner(s) for the current round are then provided as the pool of players to the next round, if another round is needed.
 
 ## Limitations
 
