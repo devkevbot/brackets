@@ -8,7 +8,7 @@ fn main() {
         Err(e) => {
             eprintln!("{}", e)
         }
-        Ok(mut bracket) => bracket.simulate(),
+        Ok(bracket) => bracket.simulate(),
     }
 }
 
@@ -78,7 +78,6 @@ impl Game {
 #[derive(Debug, Clone)]
 struct Round {
     games: Vec<Game>,
-    winners_player_pool: Vec<Player>,
 }
 
 impl Round {
@@ -90,20 +89,21 @@ impl Round {
                 .chunks(players_in_match)
                 .map(|chunk| Game::new(chunk.to_vec()))
                 .collect::<Vec<_>>(),
-            winners_player_pool: vec![],
         }
     }
 
-    fn determine_winner(&mut self) -> Vec<Player> {
+    fn determine_winner(&self) -> Vec<Player> {
+        let mut winners_player_pool: Vec<Player> = vec![];
+
         for game in &self.games {
             let winner = game.simulate();
-            self.winners_player_pool.push(winner)
+            winners_player_pool.push(winner)
         }
 
-        self.winners_player_pool.clone()
+        winners_player_pool
     }
 
-    fn simulate(&mut self) -> Vec<Player> {
+    fn simulate(&self) -> Vec<Player> {
         self.determine_winner()
     }
 }
@@ -132,7 +132,6 @@ impl Error for BracketError {}
 #[derive(Debug)]
 struct Bracket {
     num_players: u8,
-    rounds: Vec<Round>,
 }
 
 impl Bracket {
@@ -141,10 +140,7 @@ impl Bracket {
             return Err(BracketError::InvalidNumPlayers(num_players));
         }
 
-        Ok(Self {
-            num_players,
-            rounds: vec![],
-        })
+        Ok(Self { num_players })
     }
 
     fn is_positive_power_of_two(n: u8) -> bool {
@@ -155,16 +151,15 @@ impl Bracket {
         (self.num_players as f32).log2().ceil() as u8
     }
 
-    fn determine_winner(&mut self) -> Player {
+    fn determine_winner(&self) -> Player {
         let mut next_round_player_pool = (1u8..=self.num_players)
             .map(|_| Player::new())
             .collect::<Vec<_>>();
 
         for round_number in 1..=self.rounds_required() {
-            let mut round = Round::new(next_round_player_pool);
+            let round = Round::new(next_round_player_pool);
 
             next_round_player_pool = round.simulate();
-            self.rounds.push(round.clone());
 
             println!("Round {round_number} winner(s):");
             println!("{:#?}", next_round_player_pool);
@@ -174,7 +169,7 @@ impl Bracket {
         next_round_player_pool[0].clone()
     }
 
-    fn simulate(&mut self) {
+    fn simulate(&self) {
         println!(
             "Simulation details: {} players, {} round(s) required\n",
             self.num_players,
