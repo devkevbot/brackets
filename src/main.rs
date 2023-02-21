@@ -183,7 +183,7 @@ impl Bracket {
         );
 
         let winner = self.determine_winner();
-        println!("Winner: {:?}", winner);
+        println!("Winner: {}", winner.name);
     }
 }
 
