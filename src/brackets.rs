@@ -84,12 +84,16 @@ impl Bracket {
             .map(|_| Player::new())
             .collect::<Vec<_>>();
 
+        // Simulate each round one at a time.
         for _ in 1..=self.rounds_required() {
             let round = Round::new(next_round_player_pool);
             next_round_player_pool = round.simulate();
         }
 
-        next_round_player_pool[0].clone()
+        // After the final round, we're down to one last player: the winner.
+        next_round_player_pool
+            .pop()
+            .expect("Expected to find a bracket winner")
     }
 
     /// Simulated the bracket and returns the results in the form of a `BracketSimulationResult`.
@@ -151,14 +155,18 @@ struct Round {
 
 impl Round {
     fn new(initial_player_pool: Vec<Player>) -> Self {
-        let players_in_match = 2;
-
         Self {
             games: initial_player_pool
-                .chunks(players_in_match)
+                .chunks(PLAYERS_PER_MATCH)
                 .map(|chunk| {
-                    let chunk_vec = chunk.to_vec();
-                    let chunk_array: PlayerPair = [chunk_vec[0].clone(), chunk_vec[1].clone()];
+                    let chunk_array: PlayerPair =
+                        chunk.to_vec().try_into().unwrap_or_else(|v: Vec<_>| {
+                            panic!(
+                                "Expected a Vec of length {} but it was {}",
+                                PLAYERS_PER_MATCH,
+                                v.len()
+                            )
+                        });
                     Game::new(chunk_array)
                 })
                 .collect::<Vec<_>>(),
@@ -202,14 +210,17 @@ impl Game {
     }
 
     fn determine_winner(&self) -> Player {
-        let player_one_power = Self::calculate_player_power(self.players[0].skill, rand::random());
-        let player_two_power = Self::calculate_player_power(self.players[1].skill, rand::random());
+        let player_one = self.players[0].clone();
+        let player_two = self.players[1].clone();
+
+        let player_one_power = Self::calculate_player_power(player_one.skill, rand::random());
+        let player_two_power = Self::calculate_player_power(player_two.skill, rand::random());
 
         if player_one_power > player_two_power {
-            return self.players[0].clone();
+            return player_one;
         }
 
-        self.players[1].clone()
+        player_two
     }
 
     fn simulate(&self) -> Player {
@@ -227,7 +238,7 @@ struct Player {
 
 impl Player {
     fn new() -> Self {
-        // Skill from 0-99
+        // Skill from 0 to MAX_PLAYER_SKILL
         let skill = rand::random::<u8>() % (MAX_PLAYER_SKILL + 1);
 
         let names = vec![
@@ -244,7 +255,8 @@ impl Player {
     }
 }
 
-type PlayerPair = [Player; 2];
+const PLAYERS_PER_MATCH: usize = 2;
+type PlayerPair = [Player; PLAYERS_PER_MATCH];
 
 #[cfg(test)]
 mod tests {
