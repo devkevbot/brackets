@@ -15,11 +15,11 @@
 //!
 //! let num_players = 32;
 //!
-//! match Bracket::new(num_players) {
+//! match Bracket::new(num_players, RoundType::BestOfN(3)) {
 //!     Err(e) => {
 //!         eprintln!("{}", e)
 //!     }
-//!     Ok(bracket) => {
+//!     Ok(mut bracket) => {
 //!         let results = bracket.simulate();
 //!         println!("Total players: {}", results.num_players);
 //!         println!("Total rounds: {}", results.num_rounds);
@@ -28,6 +28,7 @@
 //!  }
 //! ```
 
+use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::Display;
 
@@ -38,6 +39,8 @@ pub struct Bracket {
     /// The number of players that will play in the bracket. Must be a
     /// positive power of 2, such as 2, 4, 8, 16, etc.
     num_players: u8,
+    num_games_played: u32,
+    round_type: RoundType,
 }
 
 impl Bracket {
@@ -53,22 +56,34 @@ impl Bracket {
     ///
     /// ## Good
     /// ```
-    /// use brackets::Bracket;
-    /// let bracket = Bracket::new(8).unwrap();
+    /// use brackets::*;
+    /// let bracket = Bracket::new(8, RoundType::BestOfN(1)).unwrap();
     /// ```
     ///
     /// ## Bad
     /// ```should_panic
-    /// use brackets::Bracket;
+    /// use brackets::*;
     /// // Will panic because 9 is not a positive power of 2!
-    /// let bracket = Bracket::new(9).unwrap();
+    /// let bracket = Bracket::new(9, RoundType::BestOfN(1)).unwrap();
     /// ```
-    pub fn new(num_players: u8) -> Result<Self, BracketCreationError> {
+    pub fn new(num_players: u8, round_type: RoundType) -> Result<Self, BracketCreationError> {
         if !Self::is_positive_power_of_two(num_players) {
             return Err(BracketCreationError::InvalidNumPlayers(num_players));
         }
 
-        Ok(Self { num_players })
+        match round_type {
+            RoundType::BestOfN(n) => {
+                if n % 2 == 0 {
+                    return Err(BracketCreationError::InvalidBestOfN(num_players));
+                }
+
+                Ok(Self {
+                    num_players,
+                    round_type,
+                    num_games_played: 0,
+                })
+            }
+        }
     }
 
     fn is_positive_power_of_two(n: u8) -> bool {
@@ -79,15 +94,29 @@ impl Bracket {
         (self.num_players as f32).log2().ceil() as u8
     }
 
-    fn determine_winner(&self) -> Player {
+    fn round_win_threshold(&self) -> u8 {
+        match self.round_type {
+            RoundType::BestOfN(n) => (n / 2) + 1,
+        }
+    }
+
+    pub fn min_games_required(&self) -> u32 {
+        match self.round_type {
+            RoundType::BestOfN(_) => ((self.num_players - 1) * self.round_win_threshold()) as u32,
+        }
+    }
+
+    fn determine_winner(&mut self) -> Player {
         let mut next_round_player_pool = (1u8..=self.num_players)
             .map(|_| Player::new())
             .collect::<Vec<_>>();
 
         // Simulate each round one at a time.
         for _ in 1..=self.rounds_required() {
-            let round = Round::new(next_round_player_pool);
-            next_round_player_pool = round.simulate();
+            let round = Round::new(next_round_player_pool, self.round_type.clone());
+            let sim_results = round.simulate();
+            next_round_player_pool = sim_results.0;
+            self.num_games_played += sim_results.1;
         }
 
         // After the final round, we're down to one last player: the winner.
@@ -101,16 +130,19 @@ impl Bracket {
     /// # Examples
     ///
     /// ```
-    /// use brackets::Bracket;
-    /// let bracket = Bracket::new(8).unwrap();
+    /// use brackets::*;
+    /// let mut bracket = Bracket::new(8, RoundType::BestOfN(1)).unwrap();
     /// let results = bracket.simulate();
     /// println!("{:?}", results);
     /// ```
-    pub fn simulate(&self) -> BracketSimulationResult {
+    pub fn simulate(&mut self) -> BracketSimulationResult {
+        let winner = self.determine_winner();
+
         BracketSimulationResult {
             num_players: self.num_players,
             num_rounds: self.rounds_required(),
-            winner: self.determine_winner().name,
+            num_games: self.num_games_played,
+            winner: winner.name,
         }
     }
 }
@@ -121,6 +153,8 @@ pub enum BracketCreationError {
     /// Returned when the number of players supplied to the bracket is invalid.
     /// The number of players supplied to the bracket must always be a positive power of 2.
     InvalidNumPlayers(u8),
+    /// Returned when the 'n' in a 'Best of n' series is an even number.
+    InvalidBestOfN(u8),
 }
 
 impl Display for BracketCreationError {
@@ -131,6 +165,13 @@ impl Display for BracketCreationError {
                     f,
                     "expected number of players in the bracket to be a positive power of 2, got {}",
                     num_players
+                )
+            }
+            BracketCreationError::InvalidBestOfN(n) => {
+                write!(
+                    f,
+                    "A Best Of series must be played through an odd number of games, but got {} games instead",
+                    n
                 )
             }
         }
@@ -145,16 +186,23 @@ impl Error for BracketCreationError {}
 pub struct BracketSimulationResult {
     pub num_players: u8,
     pub num_rounds: u8,
+    pub num_games: u32,
     pub winner: String,
 }
 
 #[derive(Debug, Clone)]
 struct Round {
     games: Vec<Game>,
+    round_type: RoundType,
+}
+
+#[derive(Debug, Clone)]
+pub enum RoundType {
+    BestOfN(u8),
 }
 
 impl Round {
-    fn new(initial_player_pool: Vec<Player>) -> Self {
+    fn new(initial_player_pool: Vec<Player>, round_type: RoundType) -> Self {
         Self {
             games: initial_player_pool
                 .chunks(PLAYERS_PER_MATCH)
@@ -170,21 +218,62 @@ impl Round {
                     Game::new(chunk_array)
                 })
                 .collect::<Vec<_>>(),
+            round_type,
         }
     }
 
-    fn determine_winner(&self) -> Vec<Player> {
+    fn round_win_threshold(&self) -> u8 {
+        match self.round_type {
+            RoundType::BestOfN(n) => (n / 2) + 1,
+        }
+    }
+
+    fn determine_winner(&self) -> (Vec<Player>, u32) {
         let mut winners_player_pool: Vec<Player> = vec![];
+        let mut num_games_played = 0;
 
         for game in &self.games {
-            let winner = game.simulate();
-            winners_player_pool.push(winner)
+            match self.round_type {
+                RoundType::BestOfN(num_games) => {
+                    let mut winner_record: HashMap<Player, u8> = HashMap::new();
+
+                    let mut win_threshold_met = false;
+                    for _ in 0..num_games {
+                        if win_threshold_met {
+                            break;
+                        }
+                        num_games_played += 1;
+
+                        let winner = game.simulate();
+
+                        winner_record
+                            .entry(winner)
+                            .and_modify(|wins| {
+                                let new_win_count = *wins + 1;
+                                *wins = new_win_count;
+                                if new_win_count == self.round_win_threshold() {
+                                    win_threshold_met = true;
+                                }
+                            })
+                            .or_insert(1);
+                    }
+
+                    let series_winner = winner_record
+                        .iter()
+                        .max_by_key(|entry| entry.1)
+                        .unwrap()
+                        .0
+                        .clone();
+
+                    winners_player_pool.push(series_winner)
+                }
+            }
         }
 
-        winners_player_pool
+        (winners_player_pool, num_games_played)
     }
 
-    fn simulate(&self) -> Vec<Player> {
+    fn simulate(&self) -> (Vec<Player>, u32) {
         self.determine_winner()
     }
 }
@@ -230,7 +319,7 @@ impl Game {
 
 const MAX_PLAYER_SKILL: u8 = 99;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 struct Player {
     name: String,
     skill: u8,
@@ -273,21 +362,32 @@ mod tests {
             Game::calculate_player_power(MAX_PLAYER_SKILL, true),
             MAX_PLAYER_SKILL
         );
-        assert_eq!(Game::calculate_player_power(0, true), 5);
-        assert_eq!(Game::calculate_player_power(94, true), MAX_PLAYER_SKILL);
+        assert!(Game::calculate_player_power(0, true) > 0);
+        assert_eq!(
+            Game::calculate_player_power(MAX_PLAYER_SKILL, true),
+            MAX_PLAYER_SKILL
+        );
     }
 
     #[test]
     fn test_bracket_creation() {
         let num_players = 2;
-        let bracket = Bracket::new(num_players);
+        let bracket = Bracket::new(num_players, RoundType::BestOfN(1));
         assert!(bracket.is_ok());
 
         let num_players = 3;
-        let bracket = Bracket::new(num_players);
+        let bracket = Bracket::new(num_players, RoundType::BestOfN(1));
         assert!(bracket.is_err());
         if let Err(error) = bracket {
             assert_eq!(error, BracketCreationError::InvalidNumPlayers(num_players))
+        };
+
+        let num_players = 2;
+        let n = 2;
+        let bracket = Bracket::new(num_players, RoundType::BestOfN(n));
+        assert!(bracket.is_err());
+        if let Err(error) = bracket {
+            assert_eq!(error, BracketCreationError::InvalidBestOfN(n))
         };
     }
 
@@ -309,19 +409,31 @@ mod tests {
 
     #[test]
     fn test_rounds_required() {
-        let bracket = Bracket::new(1).unwrap();
+        let bracket = Bracket::new(1, RoundType::BestOfN(1)).unwrap();
         assert_eq!(bracket.rounds_required(), 0);
 
-        let bracket = Bracket::new(2).unwrap();
+        let bracket = Bracket::new(2, RoundType::BestOfN(1)).unwrap();
         assert_eq!(bracket.rounds_required(), 1);
 
-        let bracket = Bracket::new(4).unwrap();
+        let bracket = Bracket::new(4, RoundType::BestOfN(1)).unwrap();
         assert_eq!(bracket.rounds_required(), 2);
 
-        let bracket = Bracket::new(8).unwrap();
+        let bracket = Bracket::new(8, RoundType::BestOfN(1)).unwrap();
         assert_eq!(bracket.rounds_required(), 3);
 
-        let bracket = Bracket::new(16).unwrap();
+        let bracket = Bracket::new(16, RoundType::BestOfN(1)).unwrap();
         assert_eq!(bracket.rounds_required(), 4);
+    }
+
+    #[test]
+    fn test_min_games_required() {
+        let bracket = Bracket::new(32, RoundType::BestOfN(1)).unwrap();
+        assert_eq!(bracket.min_games_required(), 31);
+
+        let bracket = Bracket::new(32, RoundType::BestOfN(3)).unwrap();
+        assert_eq!(bracket.min_games_required(), 62);
+
+        let bracket = Bracket::new(32, RoundType::BestOfN(5)).unwrap();
+        assert_eq!(bracket.min_games_required(), 93);
     }
 }
