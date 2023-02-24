@@ -158,7 +158,7 @@ impl Round {
                 .chunks(players_in_match)
                 .map(|chunk| {
                     let chunk_vec = chunk.to_vec();
-                    let chunk_array: [Player; 2] = [chunk_vec[0].clone(), chunk_vec[1].clone()];
+                    let chunk_array: PlayerPair = [chunk_vec[0].clone(), chunk_vec[1].clone()];
                     Game::new(chunk_array)
                 })
                 .collect::<Vec<_>>(),
