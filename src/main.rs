@@ -5,7 +5,10 @@ use crate::brackets::*;
 fn main() {
     let num_players = 32;
 
-    match Bracket::new(num_players, RoundType::BestOfN(3)) {
+    match Bracket::new(
+        num_players,
+        BracketType::SingleElimination(RoundType::BestOfN(3)),
+    ) {
         Err(e) => {
             eprintln!("{}", e)
         }
