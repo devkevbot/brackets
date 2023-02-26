@@ -100,7 +100,7 @@ impl Bracket {
         }
     }
 
-    pub fn min_games_required(&self) -> u32 {
+    pub fn min_games_to_determine_winner(&self) -> u32 {
         match self.round_type {
             RoundType::BestOfN(_) => ((self.num_players - 1) * self.round_win_threshold()) as u32,
         }
@@ -428,12 +428,12 @@ mod tests {
     #[test]
     fn test_min_games_required() {
         let bracket = Bracket::new(32, RoundType::BestOfN(1)).unwrap();
-        assert_eq!(bracket.min_games_required(), 31);
+        assert_eq!(bracket.min_games_to_determine_winner(), 31);
 
         let bracket = Bracket::new(32, RoundType::BestOfN(3)).unwrap();
-        assert_eq!(bracket.min_games_required(), 62);
+        assert_eq!(bracket.min_games_to_determine_winner(), 62);
 
         let bracket = Bracket::new(32, RoundType::BestOfN(5)).unwrap();
-        assert_eq!(bracket.min_games_required(), 93);
+        assert_eq!(bracket.min_games_to_determine_winner(), 93);
     }
 }

@@ -13,7 +13,10 @@ fn main() {
             let results = bracket.simulate();
             println!("Total players: {}", results.num_players);
             println!("Total rounds: {}", results.num_rounds);
-            println!("Min games required: {}", bracket.min_games_required());
+            println!(
+                "Min games required: {}",
+                bracket.min_games_to_determine_winner()
+            );
             println!("Total games: {}", results.num_games);
             println!("Winner: {}", results.winner);
         }
