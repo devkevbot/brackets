@@ -28,7 +28,6 @@
 //!  }
 //! ```
 
-use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::Display;
 
@@ -160,7 +159,6 @@ impl Bracket {
 #[derive(Debug, Copy, Clone)]
 pub enum BracketType {
     SingleElimination(RoundType),
-    // TODO: add more
 }
 
 /// Describes an error that occured during creation of the `Bracket`.
@@ -208,7 +206,7 @@ pub struct BracketSimulationResult {
 
 #[derive(Debug, Clone)]
 struct Round {
-    games: Vec<Game>,
+    matchups: Vec<PlayerPair>,
     round_type: RoundType,
 }
 
@@ -220,73 +218,71 @@ pub enum RoundType {
 impl Round {
     fn new(initial_player_pool: Vec<Player>, round_type: RoundType) -> Self {
         Self {
-            games: initial_player_pool
+            matchups: initial_player_pool
                 .chunks(PLAYERS_PER_MATCH)
-                .map(|chunk| {
-                    let chunk_array: PlayerPair =
-                        chunk.to_vec().try_into().unwrap_or_else(|v: Vec<_>| {
-                            panic!(
-                                "Expected a Vec of length {} but it was {}",
-                                PLAYERS_PER_MATCH,
-                                v.len()
-                            )
-                        });
-                    Game::new(chunk_array)
-                })
-                .collect::<Vec<_>>(),
+                .map(|chunk| chunk.to_vec().try_into().unwrap())
+                .collect::<Vec<PlayerPair>>(),
             round_type,
         }
     }
 
-    fn round_win_threshold(&self) -> u8 {
+    fn series_win_threshold(&self) -> u8 {
         match self.round_type {
             RoundType::BestOfN(n) => (n / 2) + 1,
         }
     }
 
+    fn simulate_series(&self, matchup: PlayerPair, num_games_in_series: u8) -> (Player, u32) {
+        let series_win_threshold = self.series_win_threshold();
+
+        let mut games_played: Vec<Game> = vec![];
+
+        let mut player_wins_in_series: [u8; 2] = [0, 0];
+
+        for _ in 1..=num_games_in_series {
+            if player_wins_in_series[0] == series_win_threshold
+                || player_wins_in_series[1] == series_win_threshold
+            {
+                break;
+            }
+
+            let game = Game::new(matchup.clone());
+
+            let winner = game.simulate();
+            if winner == matchup[0] {
+                player_wins_in_series[0] += 1;
+            } else {
+                player_wins_in_series[1] += 1;
+            }
+
+            games_played.push(game);
+        }
+
+        let series_winner_index = if player_wins_in_series[0] > player_wins_in_series[1] {
+            0
+        } else {
+            1
+        };
+        let series_winner = matchup[series_winner_index].clone();
+
+        (series_winner, games_played.len() as u32)
+    }
+
     fn determine_winner(&self) -> (Vec<Player>, u32) {
+        let mut games_played_in_round: u32 = 0;
         let mut winners_player_pool: Vec<Player> = vec![];
-        let mut num_games_played = 0;
 
-        for game in &self.games {
+        for matchup in &self.matchups {
             match self.round_type {
-                RoundType::BestOfN(num_games) => {
-                    let mut winner_record: HashMap<Player, u8> = HashMap::new();
-
-                    let mut win_threshold_met = false;
-                    for _ in 0..num_games {
-                        if win_threshold_met {
-                            break;
-                        }
-                        num_games_played += 1;
-
-                        let winner = game.simulate();
-
-                        winner_record
-                            .entry(winner)
-                            .and_modify(|wins| {
-                                let new_win_count = *wins + 1;
-                                *wins = new_win_count;
-                                if new_win_count == self.round_win_threshold() {
-                                    win_threshold_met = true;
-                                }
-                            })
-                            .or_insert(1);
-                    }
-
-                    let series_winner = winner_record
-                        .iter()
-                        .max_by_key(|entry| entry.1)
-                        .unwrap()
-                        .0
-                        .clone();
-
-                    winners_player_pool.push(series_winner)
+                RoundType::BestOfN(n) => {
+                    let (winner, games_played_in_series) = self.simulate_series(matchup.clone(), n);
+                    games_played_in_round += games_played_in_series;
+                    winners_player_pool.push(winner);
                 }
             }
         }
 
-        (winners_player_pool, num_games_played)
+        (winners_player_pool, games_played_in_round)
     }
 
     fn simulate(&self) -> (Vec<Player>, u32) {
@@ -335,7 +331,7 @@ impl Game {
 
 const MAX_PLAYER_SKILL: u8 = 99;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq)]
 struct Player {
     name: String,
     skill: u8,
@@ -343,7 +339,6 @@ struct Player {
 
 impl Player {
     fn new() -> Self {
-        // Skill from 0 to MAX_PLAYER_SKILL
         let skill = rand::random::<u8>() % (MAX_PLAYER_SKILL + 1);
 
         let names = vec![
