@@ -294,22 +294,27 @@ impl Game {
         Self { players }
     }
 
-    fn calculate_player_power(skill: u8, apply_skill_boost: bool) -> u8 {
-        let skill_boost: u8 = 5;
-
-        if apply_skill_boost {
-            return std::cmp::min(skill + skill_boost, Player::max_player_skill());
+    fn rng_player_skill_boost() -> u8 {
+        if rand::random() {
+            5
+        } else {
+            0
         }
+    }
 
-        skill
+    fn rng_calc_player_power(player_skill: u8) -> u8 {
+        std::cmp::min(
+            player_skill + Self::rng_player_skill_boost(),
+            Player::max_player_skill(),
+        )
     }
 
     fn determine_winner(&self) -> Player {
         let player_one = self.players[0].clone();
         let player_two = self.players[1].clone();
 
-        let player_one_power = Self::calculate_player_power(player_one.skill, rand::random());
-        let player_two_power = Self::calculate_player_power(player_two.skill, rand::random());
+        let player_one_power = Self::rng_calc_player_power(player_one.skill);
+        let player_two_power = Self::rng_calc_player_power(player_two.skill);
 
         if player_one_power > player_two_power {
             return player_one;
@@ -360,18 +365,11 @@ mod tests {
 
     #[test]
     fn test_calculate_player_power() {
-        assert_eq!(
-            Game::calculate_player_power(Player::max_player_skill(), false),
-            Player::max_player_skill()
+        assert!(
+            Game::rng_calc_player_power(Player::max_player_skill()) <= Player::max_player_skill()
         );
-        assert_eq!(Game::calculate_player_power(0, false), 0);
         assert_eq!(
-            Game::calculate_player_power(Player::max_player_skill(), true),
-            Player::max_player_skill()
-        );
-        assert!(Game::calculate_player_power(0, true) > 0);
-        assert_eq!(
-            Game::calculate_player_power(Player::max_player_skill(), true),
+            Game::rng_calc_player_power(Player::max_player_skill()),
             Player::max_player_skill()
         );
     }
