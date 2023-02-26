@@ -298,7 +298,7 @@ impl Game {
         let skill_boost: u8 = 5;
 
         if apply_skill_boost {
-            return std::cmp::min(skill + skill_boost, MAX_PLAYER_SKILL);
+            return std::cmp::min(skill + skill_boost, Player::max_player_skill());
         }
 
         skill
@@ -323,8 +323,6 @@ impl Game {
     }
 }
 
-const MAX_PLAYER_SKILL: u8 = 99;
-
 #[derive(Debug, Clone, PartialEq)]
 struct Player {
     name: String,
@@ -333,7 +331,7 @@ struct Player {
 
 impl Player {
     fn new() -> Self {
-        let skill = rand::random::<u8>() % (MAX_PLAYER_SKILL + 1);
+        let skill = rand::random::<u8>() % (Self::max_player_skill() + 1);
 
         let names = vec![
             "Alice", "Bob", "Charlie", "Dave", "Emily", "Filip", "George", "Helena",
@@ -347,6 +345,10 @@ impl Player {
             name: format!("{}-{}", name, name_suffix),
         }
     }
+
+    pub fn max_player_skill() -> u8 {
+        99
+    }
 }
 
 const PLAYERS_PER_MATCH: usize = 2;
@@ -359,18 +361,18 @@ mod tests {
     #[test]
     fn test_calculate_player_power() {
         assert_eq!(
-            Game::calculate_player_power(MAX_PLAYER_SKILL, false),
-            MAX_PLAYER_SKILL
+            Game::calculate_player_power(Player::max_player_skill(), false),
+            Player::max_player_skill()
         );
         assert_eq!(Game::calculate_player_power(0, false), 0);
         assert_eq!(
-            Game::calculate_player_power(MAX_PLAYER_SKILL, true),
-            MAX_PLAYER_SKILL
+            Game::calculate_player_power(Player::max_player_skill(), true),
+            Player::max_player_skill()
         );
         assert!(Game::calculate_player_power(0, true) > 0);
         assert_eq!(
-            Game::calculate_player_power(MAX_PLAYER_SKILL, true),
-            MAX_PLAYER_SKILL
+            Game::calculate_player_power(Player::max_player_skill(), true),
+            Player::max_player_skill()
         );
     }
 
