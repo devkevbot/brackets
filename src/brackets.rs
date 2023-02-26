@@ -95,19 +95,11 @@ impl Bracket {
         (self.num_players as f32).log2().ceil() as u8
     }
 
-    fn round_win_threshold(&self) -> u8 {
-        match &self.bracket_type {
-            BracketType::SingleElimination(round_type) => match round_type {
-                RoundType::BestOfN(n) => (n / 2) + 1,
-            },
-        }
-    }
-
     pub fn min_games_to_determine_winner(&self) -> u32 {
         match &self.bracket_type {
             BracketType::SingleElimination(round_type) => match round_type {
                 RoundType::BestOfN(_) => {
-                    ((self.num_players - 1) * self.round_win_threshold()) as u32
+                    ((self.num_players - 1) * round_type.series_win_threshold()) as u32
                 }
             },
         }
@@ -215,6 +207,14 @@ pub enum RoundType {
     BestOfN(u8),
 }
 
+impl RoundType {
+    fn series_win_threshold(&self) -> u8 {
+        match self {
+            Self::BestOfN(n) => (n / 2) + 1,
+        }
+    }
+}
+
 impl Round {
     fn new(initial_player_pool: Vec<Player>, round_type: RoundType) -> Self {
         Self {
@@ -226,14 +226,8 @@ impl Round {
         }
     }
 
-    fn series_win_threshold(&self) -> u8 {
-        match self.round_type {
-            RoundType::BestOfN(n) => (n / 2) + 1,
-        }
-    }
-
     fn simulate_series(&self, matchup: PlayerPair, num_games_in_series: u8) -> (Player, u32) {
-        let series_win_threshold = self.series_win_threshold();
+        let series_win_threshold = self.round_type.series_win_threshold();
 
         let mut games_played: Vec<Game> = vec![];
 
